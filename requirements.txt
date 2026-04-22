@@ -1,0 +1,17 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+pytest==7.4.3
+pytest-asyncio==0.21.1
+python-multipart==0.0.6
+
+# Computer Vision Dependencies
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Optional: For GPU acceleration (uncomment if CUDA available)
+# torch>=2.0.0+cu118
+# torchvision>=0.15.0+cu118
