@@ -252,6 +252,56 @@ Health check with stale feed detection.
 }
 ```
 
+## Live Dashboard
+
+Monitor real-time metrics as events are ingested.
+
+### Quick Start
+
+**Terminal 1: Start the API**
+```bash
+python -m uvicorn app.main:app --reload --port 8000
+```
+
+**Terminal 2: Start the Live Dashboard**
+```bash
+python app/live_dashboard.py
+```
+
+**Terminal 3: Stream events in real-time**
+```bash
+python pipeline/run.py --stream --stream-interval 0.5
+```
+
+The dashboard will update every 2 seconds, showing:
+- Unique visitors
+- Conversion rate
+- Average dwell time
+- Queue depth
+- Last updated timestamp
+
+### Dashboard Options
+
+```bash
+# Monitor different store
+python app/live_dashboard.py --store-id STORE_BLR_003
+
+# Change update interval
+python app/live_dashboard.py --interval 5
+
+# Connect to remote API
+python app/live_dashboard.py --api-url http://192.168.1.100:8000
+```
+
+### How It Works
+
+1. **Live Dashboard** polls `/stores/{store_id}/metrics` every 2 seconds
+2. **Streaming Pipeline** ingests events via `/events/ingest` in batches
+3. **API** computes metrics in real-time from ingested events
+4. **Dashboard** displays updated metrics as they change
+
+This demonstrates the full pipeline: **Video → Detection → Events → API → Real-time Dashboard**
+
 ## Testing
 
 Run all tests:

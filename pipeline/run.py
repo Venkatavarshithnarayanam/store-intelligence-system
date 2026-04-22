@@ -191,7 +191,9 @@ def run_mock_pipeline(
     store_id: str = "STORE_BLR_002",
     camera_id: str = "CAM_ENTRY_01",
     num_frames: int = 100,
-    num_people: int = 3
+    num_people: int = 3,
+    stream: bool = False,
+    stream_interval: float = 0.5
 ) -> None:
     """
     Run detection pipeline with mock data (for testing).
@@ -203,8 +205,15 @@ def run_mock_pipeline(
         camera_id: Camera identifier
         num_frames: Number of frames to process (for mock detector)
         num_people: Number of people to simulate (for mock detector)
+        stream: Whether to stream events to API in real-time
+        stream_interval: Interval between event batches (seconds)
     """
+    import requests
+    import time
+    
     print(f"Starting mock pipeline for {store_id}")
+    if stream:
+        print(f"Streaming mode enabled (interval: {stream_interval}s)")
     
     # Initialize components
     tracker = SimpleTracker(max_distance=50, max_age=30)
@@ -228,6 +237,7 @@ def run_mock_pipeline(
     
     # Process frames
     all_events: List[Event] = []
+    batch_events: List[Dict[str, Any]] = []
     
     for frame_idx in range(num_frames):
         # Get detections for this frame
@@ -250,6 +260,42 @@ def run_mock_pipeline(
                 queue_depth=None
             )
             all_events.extend(events)
+            
+            # Add to batch for streaming
+            if stream:
+                for event in events:
+                    batch_events.append(event.to_dict())
+        
+        # Stream batch if enabled and batch is ready
+        if stream and len(batch_events) >= 5:
+            try:
+                response = requests.post(
+                    "http://localhost:8000/events/ingest",
+                    json=batch_events,
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    print(f"✓ Streamed {len(batch_events)} events")
+                else:
+                    print(f"✗ Stream failed: {response.status_code}")
+            except requests.exceptions.RequestException as e:
+                print(f"✗ Stream error: {e}")
+            
+            batch_events = []
+            time.sleep(stream_interval)
+    
+    # Stream remaining events
+    if stream and batch_events:
+        try:
+            response = requests.post(
+                "http://localhost:8000/events/ingest",
+                json=batch_events,
+                timeout=5
+            )
+            if response.status_code == 200:
+                print(f"✓ Streamed final {len(batch_events)} events")
+        except requests.exceptions.RequestException as e:
+            print(f"✗ Final stream error: {e}")
     
     # Write events to JSONL file
     output_path = Path(output_file)
@@ -260,6 +306,8 @@ def run_mock_pipeline(
             f.write(event.to_json() + '\n')
     
     print(f"Mock pipeline complete: {len(all_events)} events written to {output_file}")
+    if stream:
+        print("✓ All events streamed to API")
 
 
 def run_pipeline(
@@ -269,6 +317,8 @@ def run_pipeline(
     store_id: str = "STORE_BLR_002",
     use_real_detection: bool = True,
     use_cross_camera: bool = True,
+    stream: bool = False,
+    stream_interval: float = 0.5,
     **kwargs
 ) -> None:
     """
@@ -281,6 +331,8 @@ def run_pipeline(
         store_id: Store identifier
         use_real_detection: Whether to use real YOLOv8 detection
         use_cross_camera: Whether to use cross-camera deduplication
+        stream: Whether to stream events to API in real-time
+        stream_interval: Interval between event batches (seconds)
         **kwargs: Additional arguments for mock pipeline
     """
     if use_real_detection and YOLO_AVAILABLE and store_layout_file:
@@ -301,6 +353,8 @@ def run_pipeline(
             video_dir=video_dir,
             output_file=output_file,
             store_id=store_id,
+            stream=stream,
+            stream_interval=stream_interval,
             **kwargs
         )
 
@@ -318,6 +372,8 @@ if __name__ == "__main__":
     parser.add_argument("--camera-id", default="CAM_ENTRY_01", help="Camera ID (mock mode only)")
     parser.add_argument("--num-frames", type=int, default=100, help="Number of frames (mock mode only)")
     parser.add_argument("--num-people", type=int, default=3, help="Number of people (mock mode only)")
+    parser.add_argument("--stream", action="store_true", help="Stream events to API in real-time")
+    parser.add_argument("--stream-interval", type=float, default=0.5, help="Interval between event batches (seconds)")
     
     args = parser.parse_args()
     
@@ -328,6 +384,8 @@ if __name__ == "__main__":
         store_id=args.store_id,
         use_real_detection=args.use_real,
         use_cross_camera=args.use_cross_camera,
+        stream=args.stream,
+        stream_interval=args.stream_interval,
         camera_id=args.camera_id,
         num_frames=args.num_frames,
         num_people=args.num_people
